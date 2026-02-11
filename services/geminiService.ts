@@ -14,7 +14,8 @@ const resumeSchema = {
         phone: { type: Type.STRING },
         email: { type: Type.STRING },
         location: { type: Type.STRING },
-        links: { type: Type.STRING },
+        website: { type: Type.STRING },
+        linkedin: { type: Type.STRING },
       },
       required: ["fullName", "phone", "email", "location"],
     },
@@ -52,6 +53,32 @@ const resumeSchema = {
         },
         required: ["institution", "qualification", "period"],
       },
+    },
+    certifications: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          issuer: { type: Type.STRING },
+          date: { type: Type.STRING },
+        }
+      }
+    },
+    projects: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          description: { type: Type.STRING },
+          associatedWith: { type: Type.STRING },
+          technologies: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          },
+        }
+      }
     },
     languages: {
       type: Type.ARRAY,
@@ -140,10 +167,10 @@ export async function extractResumeData(input: ExtractionInput): Promise<ResumeD
     const parts: any[] = [
       { text: `Extract the following resume details into the provided JSON schema. 
       CRITICAL INSTRUCTIONS:
-      1. Extract ALL sections: Profile, Summary, Technical Skills, Experience, Education, Languages, and References.
+      1. Extract ALL sections: Profile, Summary, Technical Skills, Experience, Education, Certifications, Projects, Languages, and References.
       2. If a section is missing, return an empty array [] or empty string "" - DO NOT omit the field.
-      3. For 'technicalStrengths', list specific technical skills like "Python", "SQL", "Excel", etc. 
-      4. For 'languages', list them clearly (e.g. "English (Native)").
+      3. For 'technicalStrengths', list specific technical skills.
+      4. For 'projects', associate them with a company if mentioned.
       5. Ensure no hallucination. Only use what is present in the source.` }
     ];
 
@@ -171,26 +198,27 @@ export async function extractResumeData(input: ExtractionInput): Promise<ResumeD
     
     // Ensure lists are actual arrays and items have IDs
     data.experience = (Array.isArray(data.experience) ? data.experience : []).map((exp: any, i: number) => ({
-      company: exp.company || "",
-      title: exp.title || "",
-      location: exp.location || "",
-      period: exp.period || "",
-      bullets: Array.isArray(exp.bullets) ? exp.bullets : [],
-      id: `exp-${Date.now()}-${i}`
+      ...exp,
+      id: exp.id || `exp-${Date.now()}-${i}`
     }));
 
     data.education = (Array.isArray(data.education) ? data.education : []).map((edu: any, i: number) => ({
-      institution: edu.institution || "",
-      qualification: edu.qualification || "",
-      period: edu.period || "",
-      details: edu.details || "",
-      id: `edu-${Date.now()}-${i}`
+      ...edu,
+      id: edu.id || `edu-${Date.now()}-${i}`
+    }));
+
+    data.certifications = (Array.isArray(data.certifications) ? data.certifications : []).map((cert: any, i: number) => ({
+      ...cert,
+      id: cert.id || `cert-${Date.now()}-${i}`
+    }));
+
+    data.projects = (Array.isArray(data.projects) ? data.projects : []).map((proj: any, i: number) => ({
+      ...proj,
+      id: proj.id || `proj-${Date.now()}-${i}`
     }));
 
     data.technicalStrengths = Array.isArray(data.technicalStrengths) ? data.technicalStrengths : [];
     data.languages = Array.isArray(data.languages) ? data.languages : [];
-    data.summary = data.summary || "";
-    data.references = data.references || "";
 
     return data as ResumeData;
   } catch (error) {
@@ -202,7 +230,6 @@ export async function extractResumeData(input: ExtractionInput): Promise<ResumeD
 export async function analyzeResume(data: ResumeData, jobDescription?: string): Promise<ATSAnalysisResult | null> {
   const ai = getAI();
   try {
-    // We use gemini-3-flash-preview for structured output as it is more reliable for strict JSON formatting
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Perform a concise ATS analysis of this resume based on the "ATS Evaluation Specification (v1.0)".
@@ -250,9 +277,12 @@ export async function improveResumeData(data: ResumeData, jobDescription?: strin
     });
 
     const improved = JSON.parse(response.text);
-    // Keep original IDs to prevent React re-render issues in the form
+    // Restore IDs
     improved.experience = improved.experience.map((exp: any, i: number) => ({ ...exp, id: data.experience[i]?.id || `exp-i-${i}` }));
     improved.education = improved.education.map((edu: any, i: number) => ({ ...edu, id: data.education[i]?.id || `edu-i-${i}` }));
+    improved.certifications = (improved.certifications || []).map((c: any, i: number) => ({ ...c, id: data.certifications[i]?.id || `cert-i-${i}` }));
+    improved.projects = (improved.projects || []).map((p: any, i: number) => ({ ...p, id: data.projects[i]?.id || `proj-i-${i}` }));
+    
     return improved as ResumeData;
   } catch (error) {
     console.error("Improvement error:", error);

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { ResumeData, initialResumeData, Experience, Education, ATSAnalysisResult } from './types';
+import { ResumeData, initialResumeData, Experience, Education, Certification, Project, ATSAnalysisResult } from './types';
 import ResumePreview from './components/ResumePreview';
 import { extractResumeData, improveResumeData, analyzeResume } from './services/geminiService';
 import { downloadMarkdown, downloadDocx } from './utils/exportUtils';
@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [processingStatus, setProcessingStatus] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [aiAnalysis, setAiAnalysis] = useState<ATSAnalysisResult | null>(null);
+  const [skillInput, setSkillInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Change Handlers ---
@@ -30,9 +31,21 @@ const App: React.FC = () => {
     setData(prev => ({ ...prev, profile: { ...prev.profile, [field]: value } }));
   };
   const handleSummaryChange = (val: string) => setData(prev => ({ ...prev, summary: val }));
-  const handleTechnicalStrengthsChange = (val: string) => {
-    setData(prev => ({ ...prev, technicalStrengths: val.split('\n').filter(s => s.trim() !== "") }));
+  
+  // Technical Skills Multi-Select
+  const addSkill = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && skillInput.trim()) {
+      e.preventDefault();
+      if (!data.technicalStrengths.includes(skillInput.trim())) {
+        setData(prev => ({ ...prev, technicalStrengths: [...prev.technicalStrengths, skillInput.trim()] }));
+      }
+      setSkillInput("");
+    }
   };
+  const removeSkill = (skill: string) => {
+    setData(prev => ({ ...prev, technicalStrengths: prev.technicalStrengths.filter(s => s !== skill) }));
+  };
+
   const handleUpdateExperience = (id: string, field: keyof Experience, value: any) => {
     setData(prev => ({ ...prev, experience: prev.experience.map(e => e.id === id ? { ...e, [field]: value } : e) }));
   };
@@ -43,6 +56,7 @@ const App: React.FC = () => {
   const removeExperience = (id: string) => {
     setData(prev => ({ ...prev, experience: prev.experience.filter(e => e.id !== id) }));
   };
+
   const handleUpdateEducation = (id: string, field: keyof Education, value: any) => {
     setData(prev => ({ ...prev, education: prev.education.map(e => e.id === id ? { ...e, [field]: value } : e) }));
   };
@@ -53,6 +67,29 @@ const App: React.FC = () => {
   const removeEducation = (id: string) => {
     setData(prev => ({ ...prev, education: prev.education.filter(e => e.id !== id) }));
   };
+
+  const handleUpdateCertification = (id: string, field: keyof Certification, value: string) => {
+    setData(prev => ({ ...prev, certifications: prev.certifications.map(c => c.id === id ? { ...c, [field]: value } : c) }));
+  };
+  const addCertification = () => {
+    const newCert: Certification = { id: `cert-${Date.now()}`, name: "", issuer: "", date: "" };
+    setData(prev => ({ ...prev, certifications: [...(prev.certifications || []), newCert] }));
+  };
+  const removeCertification = (id: string) => {
+    setData(prev => ({ ...prev, certifications: prev.certifications.filter(c => c.id !== id) }));
+  };
+
+  const handleUpdateProject = (id: string, field: keyof Project, value: any) => {
+    setData(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, [field]: value } : p) }));
+  };
+  const addProject = () => {
+    const newProj: Project = { id: `proj-${Date.now()}`, title: "", description: "", associatedWith: "", technologies: [] };
+    setData(prev => ({ ...prev, projects: [...(prev.projects || []), newProj] }));
+  };
+  const removeProject = (id: string) => {
+    setData(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id) }));
+  };
+
   const handleLanguagesChange = (val: string) => {
     setData(prev => ({ ...prev, languages: val.split(',').map(s => s.trim()).filter(s => s !== "") }));
   };
@@ -111,11 +148,11 @@ const App: React.FC = () => {
         setAiAnalysis(result);
         setViewMode('review');
       } else {
-        alert("Could not complete analysis. The AI model returned an invalid response. This often happens if the content is extremely long.");
+        alert("Could not complete analysis.");
       }
     } catch (error) {
       console.error(error);
-      alert("An unexpected error occurred during analysis.");
+      alert("An unexpected error occurred.");
     } finally {
       setIsProcessing(false);
       setProcessingStatus("");
@@ -131,11 +168,11 @@ const App: React.FC = () => {
         setPendingData(improved);
         setViewMode('review');
       } else {
-        alert("Optimization failed. Please try again with shorter content.");
+        alert("Optimization failed.");
       }
     } catch (error) {
       console.error(error);
-      alert("An unexpected error occurred during improvement.");
+      alert("An unexpected error occurred.");
     } finally {
       setIsProcessing(false);
       setProcessingStatus("");
@@ -185,9 +222,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden font-sans">
-      {/* LEFT SIDEBAR: Form (Editor Mode Only) */}
+      {/* LEFT SIDEBAR */}
       <div className={`w-full md:w-5/12 lg:w-4/12 bg-[#020617] text-slate-200 flex flex-col no-print border-r border-slate-800 transition-all ${viewMode === 'review' ? 'hidden md:flex' : ''}`}>
-        <header className="p-6 border-b border-slate-800 flex justify-between items-center bg-[#020617] z-10">
+        <header className="p-6 border-b border-slate-800 flex justify-between items-center bg-[#020617] z-10 shrink-0">
           <div>
             <h1 className="text-xl font-black text-white tracking-tighter">PRECISION <span className="text-blue-500">RESUME</span></h1>
             <p className="text-[9px] text-slate-500 uppercase font-bold tracking-[0.3em]">Single Locked Template</p>
@@ -221,6 +258,10 @@ const App: React.FC = () => {
                     <input className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" value={data.profile.email} onChange={e => handleProfileChange('email', e.target.value)} placeholder="Email" />
                   </div>
                   <input className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" value={data.profile.location} onChange={e => handleProfileChange('location', e.target.value)} placeholder="Location" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" value={data.profile.website || ''} onChange={e => handleProfileChange('website', e.target.value)} placeholder="My Website / Portfolio" />
+                    <input className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" value={data.profile.linkedin || ''} onChange={e => handleProfileChange('linkedin', e.target.value)} placeholder="LinkedIn URL" />
+                  </div>
                 </div>
               </section>
 
@@ -239,7 +280,23 @@ const App: React.FC = () => {
                   <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">3. Technical Skills</h3>
                 </div>
-                <textarea className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-xs font-mono focus:ring-1 focus:ring-blue-500 outline-none h-32 leading-relaxed resize-none" placeholder="Enter skills (one per line)..." value={data.technicalStrengths.join('\n')} onChange={e => handleTechnicalStrengthsChange(e.target.value)} />
+                <div className="space-y-3">
+                  <input 
+                    className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" 
+                    placeholder="Type skill and press Enter..." 
+                    value={skillInput} 
+                    onChange={e => setSkillInput(e.target.value)}
+                    onKeyDown={addSkill}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {data.technicalStrengths.map(skill => (
+                      <span key={skill} className="bg-blue-600/20 text-blue-300 text-[10px] px-2 py-1 rounded flex items-center gap-2 border border-blue-500/30">
+                        {skill}
+                        <button onClick={() => removeSkill(skill)} className="hover:text-white">×</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </section>
 
               {/* Section 4: Experience */}
@@ -249,7 +306,7 @@ const App: React.FC = () => {
                     <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">4. Experience</h3>
                   </div>
-                  <button onClick={addExperience} className="text-[9px] px-3 py-1 bg-blue-600/10 text-blue-400 rounded-full border border-blue-500/20 font-bold">+ ADD</button>
+                  <button onClick={addExperience} className="text-[9px] px-3 py-1 bg-blue-600/10 text-blue-400 rounded-full border border-blue-500/20 font-bold hover:bg-blue-600/20 transition-all">+ ADD</button>
                 </div>
                 <div className="space-y-6">
                   {data.experience.map(exp => (
@@ -269,22 +326,79 @@ const App: React.FC = () => {
                 </div>
               </section>
 
+              {/* Section 5: Projects */}
               <section>
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center gap-3">
                     <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">5. Education</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">5. Projects</h3>
                   </div>
-                  <button onClick={addEducation} className="text-[9px] px-3 py-1 bg-blue-600/10 text-blue-400 rounded-full border border-blue-500/20 font-bold">+ ADD</button>
+                  <button onClick={addProject} className="text-[9px] px-3 py-1 bg-blue-600/10 text-blue-400 rounded-full border border-blue-500/20 font-bold hover:bg-blue-600/20 transition-all">+ ADD</button>
                 </div>
                 <div className="space-y-6">
+                  {(data.projects || []).map(proj => (
+                    <div key={proj.id} className="p-4 bg-slate-900/40 rounded-xl relative group border border-slate-800">
+                      <button onClick={() => removeProject(proj.id)} className="absolute -top-2 -right-2 bg-red-600 text-white h-6 w-6 rounded-full text-[10px] hidden group-hover:flex items-center justify-center font-black">×</button>
+                      <div className="space-y-3">
+                        <input className="w-full bg-transparent font-black text-sm outline-none border-b border-slate-800 focus:border-blue-500 py-1" value={proj.title} onChange={e => handleUpdateProject(proj.id, 'title', e.target.value)} placeholder="Project Title" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <select 
+                            className="bg-slate-950 px-2 py-1.5 rounded text-[10px] border border-slate-800 outline-none text-slate-300" 
+                            value={proj.associatedWith} 
+                            onChange={e => handleUpdateProject(proj.id, 'associatedWith', e.target.value)}
+                          >
+                            <option value="">No Association</option>
+                            {data.experience.map(exp => <option key={exp.id} value={exp.company}>{exp.company}</option>)}
+                          </select>
+                          <input className="bg-slate-950 px-2 py-1.5 rounded text-[10px] border border-slate-800 outline-none" value={proj.technologies.join(', ')} onChange={e => handleUpdateProject(proj.id, 'technologies', e.target.value.split(',').map(s => s.trim()))} placeholder="Technologies (comma separated)" />
+                        </div>
+                        <textarea className="w-full bg-slate-950 p-2 text-[11px] rounded h-20 outline-none border border-slate-800 focus:border-blue-500" value={proj.description} onChange={e => handleUpdateProject(proj.id, 'description', e.target.value)} placeholder="Brief description..." />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Section 6: Education & Certs */}
+              <section>
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">6. Education & Certs</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={addEducation} className="text-[9px] px-3 py-1 bg-blue-600/10 text-blue-400 rounded-full border border-blue-500/20 font-bold hover:bg-blue-600/20 transition-all">+ EDU</button>
+                    <button onClick={addCertification} className="text-[9px] px-3 py-1 bg-green-600/10 text-green-400 rounded-full border border-green-500/20 font-bold hover:bg-green-600/20 transition-all">+ CERT</button>
+                  </div>
+                </div>
+                
+                {/* Education List */}
+                <div className="space-y-4 mb-6">
                   {data.education.map(edu => (
                     <div key={edu.id} className="p-4 bg-slate-900/40 rounded-xl relative group border border-slate-800">
                       <button onClick={() => removeEducation(edu.id)} className="absolute -top-2 -right-2 bg-red-600 text-white h-6 w-6 rounded-full text-[10px] hidden group-hover:flex items-center justify-center font-black">×</button>
                       <div className="space-y-2">
                         <input className="w-full bg-transparent font-black text-sm outline-none border-b border-slate-800 focus:border-blue-500 py-1" value={edu.institution} onChange={e => handleUpdateEducation(edu.id, 'institution', e.target.value)} placeholder="Institution" />
-                        <input className="w-full bg-transparent italic text-xs outline-none text-slate-400 border-b border-slate-800 focus:border-blue-500 py-1" value={edu.qualification} onChange={e => handleUpdateEducation(edu.id, 'qualification', e.target.value)} placeholder="Degree" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <input className="w-full bg-transparent italic text-xs outline-none text-slate-400 border-b border-slate-800 focus:border-blue-500 py-1" value={edu.qualification} onChange={e => handleUpdateEducation(edu.id, 'qualification', e.target.value)} placeholder="Degree" />
+                          <input className="bg-slate-950 px-2 py-1.5 rounded text-[10px] border border-slate-800 outline-none" value={edu.period} onChange={e => handleUpdateEducation(edu.id, 'period', e.target.value)} placeholder="Year" />
+                        </div>
                       </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Certifications List */}
+                <div className="space-y-3">
+                  <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest ml-1 mb-2">Certifications</h4>
+                  {(data.certifications || []).map(cert => (
+                    <div key={cert.id} className="p-3 bg-slate-900/20 rounded-lg relative group border border-slate-800/50">
+                       <button onClick={() => removeCertification(cert.id)} className="absolute -top-2 -right-2 bg-red-600/50 text-white h-5 w-5 rounded-full text-[9px] hidden group-hover:flex items-center justify-center font-black">×</button>
+                       <div className="grid grid-cols-2 gap-2">
+                         <input className="bg-transparent text-[11px] font-bold outline-none border-b border-slate-800 py-1" value={cert.name} onChange={e => handleUpdateCertification(cert.id, 'name', e.target.value)} placeholder="Cert Name" />
+                         <input className="bg-transparent text-[10px] outline-none border-b border-slate-800 py-1" value={cert.issuer} onChange={e => handleUpdateCertification(cert.id, 'issuer', e.target.value)} placeholder="Issuer" />
+                         <input className="bg-transparent text-[9px] outline-none border-b border-slate-800 py-1" value={cert.date} onChange={e => handleUpdateCertification(cert.id, 'date', e.target.value)} placeholder="Date" />
+                       </div>
                     </div>
                   ))}
                 </div>
@@ -293,7 +407,7 @@ const App: React.FC = () => {
               <section>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">6. Languages</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">7. Languages</h3>
                 </div>
                 <input className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none" value={data.languages.join(', ')} onChange={e => handleLanguagesChange(e.target.value)} placeholder="English, Shona..." />
               </section>
@@ -301,7 +415,7 @@ const App: React.FC = () => {
               <section>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="h-[2px] w-8 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">7. References</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">8. References</h3>
                 </div>
                 <textarea className="w-full bg-slate-900/50 border border-slate-800 rounded px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500 outline-none h-20 resize-none" value={data.references} onChange={e => handleReferencesChange(e.target.value)} />
               </section>
@@ -322,14 +436,6 @@ const App: React.FC = () => {
                     <ScoreBar label="Keywords" score={aiAnalysis.category_scores?.keyword_alignment} />
                     <ScoreBar label="Impact" score={aiAnalysis.category_scores?.content_impact} />
                     <ScoreBar label="Format" score={aiAnalysis.category_scores?.formatting_compliance} />
-                  </div>
-                  <div className="pt-4 border-t border-slate-800">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Key Recommendations</h4>
-                    <ul className="space-y-2">
-                      {aiAnalysis.improvement_recommendations?.slice(0, 3).map((rec, i) => (
-                        <li key={i} className="text-[11px] text-slate-400 flex gap-2"><span className="text-blue-500">•</span> {rec}</li>
-                      ))}
-                    </ul>
                   </div>
                 </div>
               )}
@@ -355,7 +461,7 @@ const App: React.FC = () => {
 
         {/* AI Action Panel (Sticky Bottom) */}
         {viewMode === 'editor' && (
-          <div className="p-6 bg-[#020617] border-t border-slate-800 shadow-2xl">
+          <div className="p-6 bg-[#020617] border-t border-slate-800 shadow-2xl shrink-0">
             <textarea className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-[10px] outline-none focus:border-blue-500 h-16 resize-none mb-4" placeholder="Paste Job Description for AI tailoring..." value={jobDescription} onChange={e => setJobDescription(e.target.value)} />
             <div className="flex gap-2">
               <button onClick={handleAnalyze} disabled={isProcessing} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">ANALYZE</button>
@@ -367,7 +473,7 @@ const App: React.FC = () => {
 
       {/* RIGHT CONTENT AREA */}
       <div className={`flex-1 bg-slate-100 flex flex-col h-full overflow-hidden transition-all ${viewMode === 'review' ? 'md:bg-slate-200' : ''}`}>
-        <header className="p-4 bg-white/80 backdrop-blur-md border-b border-slate-200 flex justify-between items-center no-print shadow-sm z-20">
+        <header className="p-4 bg-white/80 backdrop-blur-md border-b border-slate-200 flex justify-between items-center no-print shadow-sm z-20 shrink-0">
           {viewMode === 'editor' ? (
             <div className="flex justify-center gap-3 w-full">
               <button onClick={generatePDF} className="bg-slate-900 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">Generate PDF</button>
@@ -388,7 +494,6 @@ const App: React.FC = () => {
           )}
         </header>
 
-        {/* CONTENT DISPLAY: Editor Preview vs Parallel Review */}
         <div className="flex-1 overflow-y-auto p-12 flex flex-col items-center scrollbar-hide bg-[#f8fafc]">
           {viewMode === 'editor' ? (
             <div className="shadow-2xl h-fit border border-slate-200 print:shadow-none print:border-none">
@@ -396,7 +501,6 @@ const App: React.FC = () => {
             </div>
           ) : (
             <div className="w-full max-w-6xl space-y-12 pb-24">
-              {/* Parallel Comparison Header */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sticky top-0 bg-[#f8fafc]/80 backdrop-blur-sm py-4 z-10">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Original Draft</span>
@@ -411,39 +515,24 @@ const App: React.FC = () => {
               <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-4">
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Summary Comparison</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="space-y-2">
-                    <p className="text-sm text-slate-500 leading-relaxed italic">"{data.summary}"</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-slate-900 leading-relaxed font-medium">"{pendingData?.summary || data.summary}"</p>
-                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed italic">"{data.summary}"</p>
+                  <p className="text-sm text-slate-900 leading-relaxed font-medium">"{pendingData?.summary || data.summary}"</p>
                 </div>
               </div>
 
               {/* Experience Comparison */}
               <div className="space-y-6">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Work Experience Enhancements</h4>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Experience Comparison</h4>
                 {data.experience.map((exp, idx) => {
                   const pendingExp = pendingData?.experience[idx];
                   return (
-                    <div key={exp.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                      <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                        <div className="space-y-1">
-                          <span className="text-sm font-black text-slate-800 block uppercase tracking-tight">{exp.company || 'Role'}</span>
-                          <span className="text-[11px] text-slate-400 italic font-medium">{exp.title}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase bg-slate-50 px-3 py-1 rounded-full border border-slate-100">{exp.period}</span>
-                      </div>
+                    <div key={exp.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                         <ul className="space-y-3">
-                          {exp.bullets.map((b, i) => (
-                            <li key={i} className="text-[11px] text-slate-500 pl-4 border-l-2 border-slate-100 leading-relaxed">{b}</li>
-                          ))}
+                          {exp.bullets.map((b, i) => <li key={i} className="text-[11px] text-slate-500 pl-4 border-l-2 border-slate-100 leading-relaxed">{b}</li>)}
                         </ul>
                         <ul className="space-y-3">
-                          {(pendingExp?.bullets || exp.bullets).map((b, i) => (
-                            <li key={i} className="text-[11px] text-slate-900 font-medium pl-4 border-l-2 border-blue-500 bg-blue-50/50 p-3 rounded-r-xl leading-relaxed shadow-sm">{b}</li>
-                          ))}
+                          {(pendingExp?.bullets || exp.bullets).map((b, i) => <li key={i} className="text-[11px] text-slate-900 font-medium pl-4 border-l-2 border-blue-500 bg-blue-50/50 p-3 rounded-r-xl leading-relaxed shadow-sm">{b}</li>)}
                         </ul>
                       </div>
                     </div>
@@ -451,26 +540,23 @@ const App: React.FC = () => {
                 })}
               </div>
 
-              {/* Skills Comparison */}
-              <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Technical Skills Optimization</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                   <div className="flex flex-wrap gap-2 content-start">
-                     {data.technicalStrengths.map((s, i) => <span key={i} className="text-[10px] bg-slate-100 text-slate-600 px-3 py-1 rounded-full border border-slate-200">{s}</span>)}
-                   </div>
-                   <div className="flex flex-wrap gap-2 content-start">
-                     {(pendingData?.technicalStrengths || data.technicalStrengths).map((s, i) => (
-                       <span key={i} className="text-[10px] bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-sm">
-                         {s}
-                       </span>
-                     ))}
-                   </div>
+              {/* Projects Comparison */}
+              {data.projects && data.projects.length > 0 && (
+                <div className="space-y-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Projects Comparison</h4>
+                  {data.projects.map((proj, idx) => {
+                    const pendingProj = pendingData?.projects[idx];
+                    return (
+                      <div key={proj.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                          <p className="text-[11px] text-slate-500">{proj.description}</p>
+                          <p className="text-[11px] text-slate-900 font-medium bg-blue-50/50 p-3 rounded-xl">{pendingProj?.description || proj.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-
-              <div className="pt-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">
-                End of AI Comparison
-              </div>
+              )}
             </div>
           )}
         </div>

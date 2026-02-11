@@ -4,7 +4,8 @@ export interface ResumeProfile {
   phone: string;
   email: string;
   location: string;
-  links?: string;
+  website?: string;
+  linkedin?: string;
 }
 
 export interface Experience {
@@ -16,6 +17,13 @@ export interface Experience {
   bullets: string[];
 }
 
+export interface Certification {
+  id: string;
+  name: string;
+  issuer: string;
+  date: string;
+}
+
 export interface Education {
   id: string;
   institution: string;
@@ -24,12 +32,22 @@ export interface Education {
   details: string;
 }
 
+export interface Project {
+  id: string;
+  title: string;
+  description: string;
+  associatedWith: string; // ID or Company name from experience
+  technologies: string[];
+}
+
 export interface ResumeData {
   profile: ResumeProfile;
   summary: string;
   technicalStrengths: string[];
   experience: Experience[];
   education: Education[];
+  certifications: Certification[];
+  projects: Project[];
   languages: string[];
   references: string;
 }
@@ -78,6 +96,8 @@ export const initialResumeData: ResumeData = {
     phone: "+923215293580",
     email: "danishhabib111@gmail.com",
     location: "Islamabad, Pakistan",
+    website: "https://danishhabib.dev",
+    linkedin: "https://linkedin.com/in/danishhabib"
   },
   summary: "Motivated and adaptable professional with experience across hospitality, healthcare, and customer service sectors. Skilled in handling financial processes such as payment transactions, reporting, and maintaining accurate records. Strong interpersonal, training, and communication skills with a proven ability to work under pressure. Detail-oriented and committed to delivering high standards in both individual and team settings. Eager to contribute to dynamic environments where reliability and service excellence are valued.",
   technicalStrengths: [
@@ -90,11 +110,7 @@ export const initialResumeData: ResumeData = {
     "Food Hygiene Compliance",
     "Record Keeping",
     "POS System Handling",
-    "Risk Assessment",
-    "Basic First Aid Knowledge",
-    "Health & Safety Protocols",
-    "Team Leadership",
-    "Clear Communication"
+    "Team Leadership"
   ],
   experience: [
     {
@@ -133,6 +149,23 @@ export const initialResumeData: ResumeData = {
       qualification: "Bachelor's Degree in Economics and Finance (2:2)",
       period: "2021",
       details: ""
+    }
+  ],
+  certifications: [
+    {
+      id: "c1",
+      name: "Financial Modeling and Valuation Analyst (FMVA)",
+      issuer: "CFI",
+      date: "2023"
+    }
+  ],
+  projects: [
+    {
+      id: "p1",
+      title: "Inventory Optimization Tool",
+      description: "Developed a spreadsheet-based tracking system to reduce food waste by 15%.",
+      associatedWith: "McDonald's",
+      technologies: ["Excel", "VBA", "Data Analysis"]
     }
   ],
   languages: ["English (Fluent)", "Shona (Fluent)"],

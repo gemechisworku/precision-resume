@@ -18,14 +18,29 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ data }) => {
     >
       {/* Header */}
       <div className="text-center mb-4">
-        <h1 className="text-xl font-bold mb-1">{data.profile.fullName}</h1>
-        <div className="text-[9pt]">
-          <span>Ph. No: {data.profile.phone}</span>
-          <span className="mx-1">|</span>
-          <span>E-mail: <span className="text-blue-700 underline">{data.profile.email}</span></span>
-          <span className="mx-1">|</span>
+        <h1 className="text-xl font-bold mb-1 uppercase tracking-tight">{data.profile.fullName}</h1>
+        <div className="text-[8.5pt] text-slate-700">
+          <span>{data.profile.phone}</span>
+          <span className="mx-1.5">•</span>
+          <span>{data.profile.email}</span>
+          <span className="mx-1.5">•</span>
           <span>{data.profile.location}</span>
         </div>
+        {(data.profile.website || data.profile.linkedin) && (
+          <div className="text-[8.5pt] text-slate-700 mt-0.5">
+            {data.profile.website && (
+              <>
+                <span className="font-medium">Portfolio:</span> {data.profile.website.replace(/^https?:\/\//, '')}
+                {data.profile.linkedin && <span className="mx-1.5">•</span>}
+              </>
+            )}
+            {data.profile.linkedin && (
+              <>
+                <span className="font-medium">LinkedIn:</span> {data.profile.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '')}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sections */}
@@ -34,7 +49,7 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ data }) => {
         {/* Profile */}
         <section>
           <h2 className="font-bold border-b border-black text-[10.5pt] mb-1">PROFILE</h2>
-          <p className="text-justify text-[9.5pt] mt-2">
+          <p className="text-justify text-[9.5pt] mt-2 leading-relaxed">
             {data.summary}
           </p>
         </section>
@@ -80,17 +95,57 @@ const ResumePreview: React.FC<ResumePreviewProps> = ({ data }) => {
           </div>
         </section>
 
-        {/* Education */}
+        {/* Projects */}
+        {data.projects && data.projects.length > 0 && (
+          <section>
+            <h2 className="font-bold border-b border-black text-[10.5pt] mb-3">PROJECTS</h2>
+            <div className="space-y-4">
+              {data.projects.map((proj) => (
+                <div key={proj.id}>
+                  <div className="flex justify-between items-baseline font-bold text-[10pt]">
+                    <span>{proj.title}</span>
+                    {proj.associatedWith && <span className="text-[9pt] font-normal italic">Associated with {proj.associatedWith}</span>}
+                  </div>
+                  {proj.technologies && proj.technologies.length > 0 && (
+                    <div className="text-[8.5pt] italic mb-1 text-slate-700">
+                      Technologies: {proj.technologies.join(', ')}
+                    </div>
+                  )}
+                  <p className="text-[9.2pt] text-justify leading-relaxed">{proj.description}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Education & Certifications */}
         <section>
           <h2 className="font-bold border-b border-black text-[10.5pt] mb-2">EDUCATION & QUALIFICATION</h2>
           <div className="space-y-3">
             {data.education.map((edu) => (
               <div key={edu.id} className="text-[9.5pt]">
-                <div className="font-bold">{edu.institution}</div>
-                <div>{edu.qualification} | <span className="italic">{edu.period}</span></div>
-                {edu.details && <div className="mt-0.5">{edu.details}</div>}
+                <div className="font-bold flex justify-between">
+                  <span>{edu.institution}</span>
+                  <span className="font-normal italic text-[9pt]">{edu.period}</span>
+                </div>
+                <div>{edu.qualification}</div>
+                {edu.details && <div className="mt-0.5 text-[9pt]">{edu.details}</div>}
               </div>
             ))}
+            
+            {/* Certifications Sub-section */}
+            {data.certifications && data.certifications.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-bold text-[9.5pt] mb-1 italic">Professional Certifications</h3>
+                <ul className="list-disc ml-5 space-y-0.5 text-[9.2pt]">
+                  {data.certifications.map((cert) => (
+                    <li key={cert.id}>
+                      <span className="font-bold">{cert.name}</span> — {cert.issuer} ({cert.date})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </section>
 
