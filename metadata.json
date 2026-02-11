@@ -1,0 +1,7 @@
+{
+  "name": "Precision Resume Builder",
+  "description": "An AI-powered resume builder that extracts data from existing files, improves content for ATS, and generates pixel-perfect PDF, DOCX, and Markdown exports based on a strict professional template.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
