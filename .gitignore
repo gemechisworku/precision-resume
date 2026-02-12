@@ -1,5 +1,10 @@
 # Logs
-logs
+# Log files - dated format: YYYY-MM-DD.log
+logs/*.log
+logs/error.log
+logs/combined.log
+logs/exceptions.log
+logs/rejections.log
 *.log
 npm-debug.log*
 yarn-debug.log*

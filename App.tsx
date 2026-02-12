@@ -187,17 +187,103 @@ const App: React.FC = () => {
     setViewMode('editor');
   };
 
-  const generatePDF = () => {
-    const element = document.getElementById('resume-preview');
-    if (!element) return;
-    const opt = {
-      margin: 0,
-      filename: `${data.profile.fullName.replace(/\s+/g, '_')}_Resume.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    window.html2pdf().set(opt).from(element).save();
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  const generatePDF = async () => {
+    try {
+      const element = document.getElementById('resume-preview');
+      if (!element) {
+        alert('Resume preview not found. Please make sure a resume is loaded.');
+        return;
+      }
+      
+      if (typeof window.html2pdf !== 'function') {
+        alert('PDF generator is still loading. Please wait a moment and try again.');
+        console.error('html2pdf is not loaded. Check if the CDN script loaded correctly.');
+        return;
+      }
+
+      setIsGeneratingPDF(true);
+      
+      const name = data.profile.fullName?.trim() ? data.profile.fullName.replace(/\s+/g, '_') : 'Resume';
+      const opt = {
+        margin: 0,
+        filename: `${name}_Resume.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true, 
+          letterRendering: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          // Convert oklch() colors to computed rgb() before html2canvas renders.
+          // Tailwind CSS v4 uses oklch() which html2canvas doesn't support.
+          onclone: (clonedDoc: Document) => {
+            const clonedElement = clonedDoc.getElementById('resume-preview');
+            if (!clonedElement) return;
+            
+            // Get all elements from both original and clone
+            const originalElements = [element, ...Array.from(element.querySelectorAll('*'))];
+            const clonedElements = [clonedElement, ...Array.from(clonedElement.querySelectorAll('*'))];
+            
+            // Map original to clone by index (they should be in same order)
+            for (let i = 0; i < originalElements.length && i < clonedElements.length; i++) {
+              const origEl = originalElements[i] as HTMLElement;
+              const cloneEl = clonedElements[i] as HTMLElement;
+              
+              // Get computed styles from ORIGINAL element (browser has already resolved oklch to rgb)
+              const computed = window.getComputedStyle(origEl);
+              
+              // Copy ALL computed CSS properties as inline styles with !important
+              // This ensures html2canvas only sees RGB values from computed styles, never oklch() from stylesheets
+              const style = computed as any;
+              for (let j = 0; j < style.length; j++) {
+                const prop = style[j];
+                const value = computed.getPropertyValue(prop);
+                
+                // Skip properties that might contain oklch or are not needed
+                if (value && value.trim() && 
+                    value !== 'none' && 
+                    value !== 'normal' &&
+                    !value.includes('oklch') &&
+                    !prop.startsWith('--')) { // Skip CSS custom properties
+                  try {
+                    cloneEl.style.setProperty(prop, value, 'important');
+                  } catch (e) {
+                    // Some properties might not be settable, skip them
+                  }
+                }
+              }
+            }
+            
+            // Remove all stylesheets AFTER applying inline styles to prevent html2canvas
+            // from reading oklch() colors from Tailwind CSS v4 stylesheets
+            try {
+              const stylesheets = Array.from(clonedDoc.styleSheets);
+              for (const sheet of stylesheets) {
+                if (sheet.ownerNode) {
+                  sheet.ownerNode.parentNode?.removeChild(sheet.ownerNode);
+                }
+              }
+              
+              // Remove all <link> and <style> tags that might contain oklch
+              const links = Array.from(clonedDoc.querySelectorAll('link[rel="stylesheet"], style'));
+              links.forEach(link => link.remove());
+            } catch (e) {
+              // Some stylesheets can't be removed (cross-origin), that's okay
+              // The inline styles with !important should override them anyway
+            }
+          }
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      await window.html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const ScoreBar = ({ label, score, weight }: { label: string, score: number | undefined, weight?: string }) => {
@@ -476,8 +562,8 @@ const App: React.FC = () => {
         <header className="p-4 bg-white/80 backdrop-blur-md border-b border-slate-200 flex justify-between items-center no-print shadow-sm z-20 shrink-0">
           {viewMode === 'editor' ? (
             <div className="flex justify-center gap-3 w-full">
-              <button onClick={generatePDF} className="bg-slate-900 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">Generate PDF</button>
-              <button onClick={() => downloadDocx(data)} className="bg-blue-600 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">DOCX</button>
+              <button onClick={() => generatePDF()} disabled={isGeneratingPDF} className={`bg-slate-900 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${isGeneratingPDF ? 'opacity-50 cursor-wait' : ''}`}>{isGeneratingPDF ? 'Generating...' : 'Generate PDF'}</button>
+              <button onClick={() => downloadDocx(data).catch(e => console.error('DOCX download failed:', e))} className="bg-blue-600 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">DOCX</button>
               <button onClick={() => downloadMarkdown(data)} className="bg-white border border-slate-200 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800">Markdown</button>
             </div>
           ) : (

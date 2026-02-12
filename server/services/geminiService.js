@@ -1,6 +1,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import logger from '../utils/logger.js';
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || "" });
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+  if (!apiKey) {
+    logger.error("GEMINI_API_KEY is not set");
+  } else {
+    logger.debug("Gemini client initialized");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 const resumeSchema = {
   type: Type.OBJECT,
@@ -15,7 +24,7 @@ const resumeSchema = {
         website: { type: Type.STRING },
         linkedin: { type: Type.STRING },
       },
-      required: ["fullName", "phone", "email", "location"],
+      required: ["fullName", "phone", "email", "location", "website", "linkedin"],
     },
     summary: { type: Type.STRING },
     technicalStrengths: {
@@ -49,7 +58,7 @@ const resumeSchema = {
           period: { type: Type.STRING },
           details: { type: Type.STRING },
         },
-        required: ["institution", "qualification", "period"],
+        required: ["institution", "qualification", "period", "details"],
       },
     },
     certifications: {
@@ -60,7 +69,8 @@ const resumeSchema = {
           name: { type: Type.STRING },
           issuer: { type: Type.STRING },
           date: { type: Type.STRING },
-        }
+        },
+        required: ["name", "issuer", "date"],
       }
     },
     projects: {
@@ -75,7 +85,8 @@ const resumeSchema = {
             type: Type.ARRAY,
             items: { type: Type.STRING }
           },
-        }
+        },
+        required: ["title", "description", "associatedWith", "technologies"],
       }
     },
     languages: {
@@ -84,7 +95,7 @@ const resumeSchema = {
     },
     references: { type: Type.STRING },
   },
-  required: ["profile", "summary", "technicalStrengths", "experience", "education", "languages", "references"],
+  required: ["profile", "summary", "technicalStrengths", "experience", "education", "certifications", "projects", "languages", "references"],
 };
 
 const atsAnalysisSchema = {
@@ -100,7 +111,7 @@ const atsAnalysisSchema = {
         experience_depth: { type: Type.NUMBER },
         language_quality: { type: Type.NUMBER },
       },
-      required: ["keyword_alignment", "content_impact", "formatting_compliance", "experience_depth", "language_quality"]
+      required: ["keyword_alignment", "content_impact", "formatting_compliance", "experience_depth", "language_quality"],
     },
     sub_scores: {
       type: Type.OBJECT,
@@ -123,7 +134,8 @@ const atsAnalysisSchema = {
         E1_grammar: { type: Type.NUMBER },
         E2_tense_consistency: { type: Type.NUMBER },
         E3_conciseness: { type: Type.NUMBER },
-      }
+      },
+      required: ["A1_required_skill_match", "A2_secondary_skill_coverage", "A3_keyword_naturalness", "A4_role_title_alignment", "B1_action_verbs", "B2_quantification", "B3_outcome_orientation", "B4_relevance_filtering", "C1_standard_headings", "C2_ats_safe_structure", "C3_date_consistency", "C4_bullet_clarity", "D1_skill_in_context", "D2_leadership_signals", "D3_career_progression", "E1_grammar", "E2_tense_consistency", "E3_conciseness"],
     },
     deductions_applied: {
       type: Type.ARRAY,
@@ -132,7 +144,8 @@ const atsAnalysisSchema = {
         properties: {
           reason: { type: Type.STRING },
           points: { type: Type.NUMBER },
-        }
+        },
+        required: ["reason", "points"],
       }
     },
     improvement_recommendations: {
@@ -148,12 +161,31 @@ const atsAnalysisSchema = {
       items: { type: Type.STRING }
     }
   },
-  required: ["final_score", "category_scores", "sub_scores", "deductions_applied", "improvement_recommendations"]
+  required: ["final_score", "category_scores", "sub_scores", "deductions_applied", "improvement_recommendations", "keyword_gap_list", "missing_required_skills"],
 };
 
 export async function extractResumeData(input) {
+  const operationId = `extract-gemini-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
+  logger.info('Gemini extractResumeData called', {
+    operationId,
+    hasFile: !!input.file,
+    hasText: !!input.text,
+    fileType: input.file?.mimeType,
+    fileDataLength: input.file?.data?.length,
+    textLength: input.text?.length
+  });
+  
   const ai = getAI();
   try {
+    logger.info('Preparing Gemini API request', {
+      operationId,
+      model: "gemini-3-flash-preview",
+      hasFile: !!input.file,
+      hasText: !!input.text
+    });
+    
     const parts = [
       { text: `Extract the following resume details into the provided JSON schema. 
       CRITICAL INSTRUCTIONS:
@@ -175,6 +207,7 @@ export async function extractResumeData(input) {
       parts.push({ text: input.text });
     }
 
+    const apiStartTime = Date.now();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: { parts },
@@ -183,7 +216,28 @@ export async function extractResumeData(input) {
         responseSchema: resumeSchema,
       },
     });
+    
+    const apiDuration = Date.now() - apiStartTime;
+    logger.info('Gemini API response received', {
+      operationId,
+      duration: `${apiDuration}ms`,
+      hasText: !!response.text,
+      textLength: response.text?.length
+    });
 
+    if (!response.text) {
+      logger.error('Gemini returned empty text for extraction', {
+        operationId
+      });
+      throw new Error('Gemini API returned empty text');
+    }
+    
+    logger.debug('Parsing Gemini response', {
+      operationId,
+      textLength: response.text.length,
+      textPreview: response.text.substring(0, 200)
+    });
+    
     const data = JSON.parse(response.text);
     
     data.experience = (Array.isArray(data.experience) ? data.experience : []).map((exp, i) => ({
@@ -209,16 +263,47 @@ export async function extractResumeData(input) {
     data.technicalStrengths = Array.isArray(data.technicalStrengths) ? data.technicalStrengths : [];
     data.languages = Array.isArray(data.languages) ? data.languages : [];
 
+    const totalDuration = Date.now() - startTime;
+    logger.info('Gemini extraction successful', {
+      operationId,
+      totalDuration: `${totalDuration}ms`,
+      apiDuration: `${apiDuration}ms`,
+      experienceCount: data.experience.length,
+      educationCount: data.education.length,
+      certificationsCount: data.certifications.length,
+      projectsCount: data.projects.length
+    });
+    
     return data;
   } catch (error) {
-    console.error("Extraction error:", error);
-    return null;
+    logger.error("Gemini extraction error", {
+      message: error.message,
+      stack: error.stack
+    });
+    throw error; // Throw instead of returning null
   }
 }
 
 export async function analyzeResume(data, jobDescription) {
+  const operationId = `analyze-gemini-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
+  logger.info('Gemini analyzeResume called', {
+    operationId,
+    hasData: !!data,
+    hasJobDescription: !!jobDescription,
+    jobDescriptionLength: jobDescription?.length,
+    dataKeys: data ? Object.keys(data) : []
+  });
+  
   const ai = getAI();
   try {
+    logger.info('Sending analysis request to Gemini API', {
+      operationId,
+      model: "gemini-3-flash-preview"
+    });
+    
+    const apiStartTime = Date.now();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Perform a concise ATS analysis of this resume based on the "ATS Evaluation Specification (v1.0)".
@@ -237,17 +322,67 @@ export async function analyzeResume(data, jobDescription) {
       },
     });
     
-    if (!response.text) return null;
-    return JSON.parse(response.text);
+    const apiDuration = Date.now() - apiStartTime;
+    logger.info('Gemini API analysis response received', {
+      operationId,
+      duration: `${apiDuration}ms`,
+      hasText: !!response.text,
+      textLength: response.text?.length
+    });
+    
+    if (!response.text) {
+      logger.error("Gemini returned empty text for analysis", {
+        operationId
+      });
+      throw new Error("Gemini API returned empty text");
+    }
+    
+    logger.debug('Parsing analysis response', {
+      operationId,
+      textLength: response.text.length
+    });
+    
+    const analysisResult = JSON.parse(response.text);
+    const totalDuration = Date.now() - startTime;
+    
+    logger.info('Gemini analysis successful', {
+      operationId,
+      totalDuration: `${totalDuration}ms`,
+      finalScore: analysisResult.final_score,
+      categoryScores: analysisResult.category_scores
+    });
+    
+    return analysisResult;
   } catch (error) {
-    console.error("Analysis error:", error);
-    return null;
+    logger.error("Gemini analysis error", {
+      message: error.message,
+      stack: error.stack
+    });
+    throw error; // Throw instead of returning null
   }
 }
 
 export async function improveResumeData(data, jobDescription) {
+  const operationId = `improve-gemini-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
+  logger.info('Gemini improveResumeData called', {
+    operationId,
+    hasData: !!data,
+    hasJobDescription: !!jobDescription,
+    jobDescriptionLength: jobDescription?.length,
+    experienceCount: data?.experience?.length,
+    educationCount: data?.education?.length
+  });
+  
   const ai = getAI();
   try {
+    logger.info('Sending improvement request to Gemini API', {
+      operationId,
+      model: "gemini-3-flash-preview"
+    });
+    
+    const apiStartTime = Date.now();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Improve the text content of this resume while keeping the structure identical.
@@ -265,16 +400,47 @@ export async function improveResumeData(data, jobDescription) {
       },
     });
 
+    const apiDuration = Date.now() - apiStartTime;
+    logger.info('Gemini API improvement response received', {
+      operationId,
+      duration: `${apiDuration}ms`,
+      hasText: !!response.text,
+      textLength: response.text?.length
+    });
+    
+    if (!response.text) {
+      logger.error('Gemini returned empty text for improvement', {
+        operationId
+      });
+      throw new Error('Gemini API returned empty text');
+    }
+    
+    logger.debug('Parsing improvement response', {
+      operationId,
+      textLength: response.text.length
+    });
+
     const improved = JSON.parse(response.text);
     improved.experience = improved.experience.map((exp, i) => ({ ...exp, id: data.experience[i]?.id || `exp-i-${i}` }));
     improved.education = improved.education.map((edu, i) => ({ ...edu, id: data.education[i]?.id || `edu-i-${i}` }));
     improved.certifications = (improved.certifications || []).map((c, i) => ({ ...c, id: data.certifications[i]?.id || `cert-i-${i}` }));
     improved.projects = (improved.projects || []).map((p, i) => ({ ...p, id: data.projects[i]?.id || `proj-i-${i}` }));
     
+    const totalDuration = Date.now() - startTime;
+    logger.info('Gemini improvement successful', {
+      operationId,
+      totalDuration: `${totalDuration}ms`,
+      experienceCount: improved.experience.length,
+      educationCount: improved.education.length
+    });
+    
     return improved;
   } catch (error) {
-    console.error("Improvement error:", error);
-    return null;
+    logger.error("Gemini improvement error", {
+      message: error.message,
+      stack: error.stack
+    });
+    throw error; // Throw instead of returning null
   }
 }
 
